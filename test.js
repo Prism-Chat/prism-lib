@@ -1,4 +1,4 @@
-const { Prism } = require('./dist/Prism-min.js');
+const { Prism } = require('./dist/Prism.js');
 const Crypto = require('crypto');
 
 //console.log(Crypto.randomBytes(2048).toString('base64'));
@@ -26,7 +26,8 @@ const testRsaPublicEncrypt = () => {
 	let testObj = {
 		message: 'test',
 	};
-	let encrypted = prism.publicEncrypt(testObj);
+
+	let encrypted = prism.publicEncrypt(testObj, prism.publicKey);
 	let decrypted = prism.privateDecrypt(encrypted);
 
 	console.log(
@@ -41,7 +42,7 @@ const testRsaSign = () => {
 	};
 
 	let signed = prism.sign(testObj);
-	let verified = prism.verify(testObj, signed);
+	let verified = prism.verify(testObj, signed, prism.publicKey);
 
 	console.log('testRsaSign: ' + verified);
 };

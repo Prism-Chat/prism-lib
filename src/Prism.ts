@@ -2,6 +2,7 @@ import * as crypto from 'crypto';
 
 // Prism interface defining the main data transition packet.
 interface IPrism {
+	sender: string;
 	type: string;
 	data: any;
 }
@@ -19,10 +20,10 @@ class Prism {
 	}
 
 	// Generates an RSA keypair to be used as your identity key
-	public generateKeyPair(modulusLength: number = 4096) {
+	public generateKeyPair() {
 		// Generate keys
 		const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-			modulusLength: modulusLength,
+			modulusLength: 4096,
 			publicKeyEncoding: {
 				type: 'spki',
 				format: 'der',
@@ -45,14 +46,14 @@ class Prism {
 	}
 
 	// Create random key to be used in symmetric encryption
-	public generateKey(min: number = 128, max: number = 256) {
+	public generateKey() {
 		return crypto
-			.randomBytes(Math.floor(Math.random() * (max - min + 1)) + min)
+			.randomBytes(Math.floor(Math.random() * (256 - 128 + 1)) + 128)
 			.toString('base64');
 	}
 
 	// Encrypt data with a public RSA key
-	public publicEncrypt(data: any, publicKey: string = this.publicKey) {
+	public publicEncrypt(data: any, publicKey: string) {
 		return crypto
 			.publicEncrypt(
 				this.toPem(publicKey, 'public'),
@@ -62,11 +63,11 @@ class Prism {
 	}
 
 	// Decrypt data with a private RSA key
-	public privateDecrypt(data: string, privateKey: string = this.privateKey) {
+	public privateDecrypt(data: string) {
 		return JSON.parse(
 			crypto
 				.privateDecrypt(
-					this.toPem(privateKey, 'private'),
+					this.toPem(this.privateKey, 'private'),
 					Buffer.from(data, 'base64')
 				)
 				.toString()
@@ -74,22 +75,18 @@ class Prism {
 	}
 
 	// Sign data with a private RSA key
-	public sign(data: any, privateKey: string = this.privateKey) {
+	public sign(data: any) {
 		return crypto
 			.sign(
 				'SHA256',
 				Buffer.from(JSON.stringify(data)),
-				this.toPem(privateKey, 'private')
+				this.toPem(this.privateKey, 'private')
 			)
 			.toString('base64');
 	}
 
 	// Verify that a piece of data was signed by the owner of a public key
-	public verify(
-		data: any,
-		signature: string,
-		publicKey: string = this.publicKey
-	) {
+	public verify(data: any, signature: string, publicKey: string) {
 		return crypto.verify(
 			'SHA256',
 			Buffer.from(JSON.stringify(data)),
