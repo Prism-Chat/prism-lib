@@ -1,0 +1,28 @@
+{
+  "name": "prism-lib",
+  "version": "1.0.0",
+  "description": "This is the main client library used to encrypt information on the client side before even being sent to the server.",
+  "main": "prism.js",
+  "scripts": {
+    "test": "npm run build && node test.js",
+    "build": "npm run compile && npm run minify",
+		"compile": "tsc",
+		"minify": "uglifyjs dist/Prism.js --compress --mangle --output dist/Prism-min.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Prism-Chat/prism-lib.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Prism-Chat/prism-lib/issues"
+  },
+  "homepage": "https://github.com/Prism-Chat/prism-lib#readme",
+  "devDependencies": {
+    "@types/node": "^17.0.31",
+    "typescript": "^4.6.4",
+    "uglify-js": "^3.15.4"
+  }
+}
