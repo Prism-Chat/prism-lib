@@ -14,7 +14,7 @@ class Prism {
 	public privateKey: string;
 
 	// Assign keys from constructor to state
-	constructor(publicKey: string, privateKey: string) {
+	constructor(publicKey: string = '', privateKey: string = '') {
 		this.publicKey = publicKey;
 		this.privateKey = privateKey;
 	}
