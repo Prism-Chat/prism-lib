@@ -17,7 +17,9 @@ describe('Key exchange.', () => {
 	test('Alice initiates initial communication and bob verifies.', () => {
 		let initialCommunicationPacket = {
 			sender: alice.publicKey,
-			type: 'prismke1',
+			scheme: 'prism1',
+			type: 'initial_communication',
+			timestamp: Date.now(),
 			data: {
 				recipient: alice.sign(bob.publicKey),
 			},
@@ -46,7 +48,9 @@ describe('Key exchange.', () => {
 
 		let responseCommunicationPacket = {
 			sender: bob.publicKey,
-			type: 'prismke2',
+			scheme: 'prism1',
+			type: 'key_response',
+			timestamp: Date.now(),
 			data: {
 				recipient: bob.sign(alice.publicKey),
 				key: generatedSymmetricKey,
@@ -78,7 +82,9 @@ describe('Key exchange.', () => {
 
 		let messageObject = {
 			sender: alice.publicKey,
+			scheme: 'prism1',
 			type: 'message',
+			timestamp: Date.now(),
 			data: alice.encrypt(
 				{
 					message: 'Hello World!',

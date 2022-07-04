@@ -56,7 +56,9 @@ describe('Unit testing.', () => {
 	test('Test write and read message.', () => {
 		let testObject = {
 			sender: alice.publicKey,
+			scheme: 'prism1',
 			type: 'message',
+			timestamp: Date.now(),
 			data: {
 				message: 'test',
 			},

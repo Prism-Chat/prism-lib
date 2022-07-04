@@ -3,7 +3,9 @@ import * as crypto from 'crypto';
 // Prism interface defining the main data transition packet.
 interface IPrism {
 	sender: string;
+	scheme: string;
 	type: string;
+	timestamp: number;
 	data: any;
 }
 

@@ -22,7 +22,9 @@ describe('Readdress.', () => {
 
 		let messageObject = {
 			sender: alice.publicKey,
+			scheme: 'prism1',
 			type: 'readdress',
+			timestamp: Date.now(),
 			data: alice.encrypt(
 				{
 					publicKey: alice.publicKey,
