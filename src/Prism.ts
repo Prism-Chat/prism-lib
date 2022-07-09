@@ -1,18 +1,9 @@
 import _sodium from 'libsodium-wrappers';
-
-// Prism interface defining the main data transition packet.
-interface IPrismPacket {
-	sender: string;
-	type: string;
-	timestamp: number;
-	data: any;
-}
-
-// Prism encryption class
 class Prism {
 	// Define Prism keys
 	private publicKey: any;
 	private privateKey: any;
+	private server: any;
 	private sodium: any;
 
 	// Get object containing keys in base64 format.
@@ -30,6 +21,8 @@ class Prism {
 	public async init(publicKey: string = '', privateKey: string = '') {
 		await _sodium.ready;
 		this.sodium = _sodium;
+
+		this.server = '';
 
 		if (publicKey === '' || privateKey === '') {
 			let keys = this.generateKeyPair();
@@ -71,18 +64,18 @@ class Prism {
 		);
 
 		return {
-			publicNonce: this.sodium.to_base64(publicNonce),
+			nonce: this.sodium.to_base64(publicNonce),
 			cypher: this.sodium.to_base64(cypher),
 		};
 	}
 
 	// Decrypt data with a symmetric key
-	public decrypt(data: string, key: string, publicNonce: string): any {
+	public decrypt(data: string, key: string, nonce: string): any {
 		let decrypted = this.sodium.crypto_aead_chacha20poly1305_decrypt(
 			null,
 			this.sodium.from_base64(data),
 			null,
-			this.sodium.from_base64(publicNonce),
+			this.sodium.from_base64(nonce),
 			this.sodium.from_base64(key)
 		);
 
@@ -128,7 +121,7 @@ class Prism {
 	}
 
 	// Decrypt an encryption box
-	public decryptBox(data: string, nonce: number, senderPublicKey: string) {
+	public decryptBox(data: string, nonce: string, senderPublicKey: string) {
 		let decryptedPacket = this.sodium.crypto_box_open_easy(
 			this.sodium.from_base64(data),
 			this.sodium.from_base64(nonce),
@@ -198,7 +191,57 @@ class Prism {
 
 		return this.sodium.to_base64(newKey);
 	}
+
+	public createTransportPacket(
+		dataObjectCypher: any,
+		dataObjectNonce: any,
+		type: string,
+		recipientPublicKey: string
+	) {
+		let boxObject = {
+			type: type,
+			timestamp: Date.now(),
+			nonce: dataObjectNonce,
+			data: dataObjectCypher,
+		};
+
+		let encryptedBoxObject = this.encryptBox(boxObject, recipientPublicKey);
+
+		let packetObj = {
+			sender: `${this.server}:${this.keys.publicKey}`,
+			nonce: encryptedBoxObject.nonce,
+			box: encryptedBoxObject.cypher,
+		};
+
+		let encryptedPacketObjectKey = this.generateKey();
+		let encryptedPacketObject = this.encrypt(
+			packetObj,
+			encryptedPacketObjectKey
+		);
+
+		let encryptedKeyNonce = this.encryptPublic(
+			`${encryptedPacketObjectKey}:${encryptedPacketObject.nonce}`,
+			recipientPublicKey
+		);
+
+		return `${encryptedKeyNonce}:${encryptedPacketObject.cypher}`;
+	}
+
+	public readTransportPacket(data: string) {
+		let [encryptedKeyNonce, encryptedPacket] = data.split(':');
+		let decryptedKeyNonce = this.decryptPrivate(encryptedKeyNonce);
+		let [packetKey, packetNonce] = decryptedKeyNonce.split(':');
+		let decryptedPacket = this.decrypt(encryptedPacket, packetKey, packetNonce);
+		let [senderServer, senderPublicKey] = decryptedPacket.sender.split(':');
+		let decryptedBox = this.decryptBox(
+			decryptedPacket.box,
+			decryptedPacket.nonce,
+			senderPublicKey
+		);
+		decryptedPacket.box = decryptedBox;
+		return decryptedPacket;
+	}
 }
 
 // Export Prism object as well as interface
-export { Prism, IPrismPacket };
+export { Prism };

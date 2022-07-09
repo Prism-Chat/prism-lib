@@ -95,7 +95,7 @@ describe('Unit testing.', () => {
 
 		let key = alice.generateKey();
 		let cypher = alice.encrypt(testObj, key);
-		let decrypted = bob.decrypt(cypher.cypher, key, cypher.publicNonce);
+		let decrypted = bob.decrypt(cypher.cypher, key, cypher.nonce);
 
 		expect(decrypted).toMatchObject(testObj);
 	});
