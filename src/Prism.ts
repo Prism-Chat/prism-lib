@@ -11,8 +11,8 @@ interface IPrismPacket {
 // Prism encryption class
 class Prism {
 	// Define Prism keys
-	public publicKey: any;
-	public privateKey: any;
+	private publicKey: any;
+	private privateKey: any;
 	private sodium: any;
 
 	// Get object containing keys in base64 format.
@@ -48,7 +48,7 @@ class Prism {
 	}
 
 	// Generates a key pair to be used as your identity key
-	public generateKeyPair() {
+	private generateKeyPair() {
 		const { publicKey, privateKey } = this.sodium.crypto_box_keypair();
 		return {
 			publicKey,

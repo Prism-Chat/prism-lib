@@ -15,7 +15,7 @@ describe('Feature testing.', () => {
 	afterEach(() => {});
 
 	test('Test generating RSA Keys.', () => {
-		expect(alice.publicKey).not.toEqual('');
-		expect(alice.privateKey).not.toEqual('');
+		expect(alice.keys.publicKey).not.toEqual('');
+		expect(alice.keys.privateKey).not.toEqual('');
 	});
 });
