@@ -1,8 +1,8 @@
 # Prism Lib
 
-This is the main client library used to encrypt information on the client side before even being sent to the server.
+The Prism library gives you easy to use tools built upon [libsodium](https://libsodium.gitbook.io/doc/) to perform E2E encryption from the client side!
 
-To use this library you can either include the Prism TypeScript file in a typescript project, or you can build a JavaScript version of the library.
+To use this library you can either include the Prism TypeScript file in a typescript project, or you can build the pure JavaScript version of the library.
 
 ## How to use
 
@@ -10,10 +10,11 @@ This is a small guide on how to use the Prism client library as well as the avai
 
 ### Create Prism Instance
 
-When you create a Prism object it takes two optional parameters of an rsa public key and an rsa private key. Both key are required to run most of the other Prism functions. If you do not have an RSA key-pair to pass into the constructor you can leave is blank and generate two new keys with another function.
+The Prism object is designed to represent a client, in this case we will be using Alice and Bob as examples. Once you create a prism object you must then run the init function which is an async function. The init function allows you to put existing keys into the object state, or if none are provided it will generate a new set of keys. This must be done due to the use of libsodium.
 
 ``` JavaScript
-const Prism = new Prism(publicKey, privateKey);
+const alice = new Prism();
+alice.init();
 ```
 
 ### Generate Key Pair
@@ -24,82 +25,98 @@ Creates a new RSA key-pair returning an object containing both keys as well as a
 const {publicKey, privateKey} = Prism.generateKeyPair();
 ```
 
-### Generate Key
+### Read keys
 
-Creates a new and random key designed to be used for symmetric encryption.
+You can read the keys in an object using the ```keys``` getter.
 
 ``` JavaScript
-const key = Prism.generateKey();
+const keys = alice.keys;
 ```
 
-### Public Key Encrypt
+### Generate symmetric key
 
-This function takes a JavaScript object and a public key. It then coverts the JavaScript object into an encrypted string.
+You can generate a random key to be used in symmetric encryption.
 
 ``` JavaScript
-const encryptedString = Prism.publicEncrypt(data, publicKey?);
+const key = alice.generateKey();
 ```
 
-### Private Key Decrypt
+### Encrypt data symmetrically
 
-This function takes in a string that has been encrypted with the ```publicEncrypt``` function and then attempts to decrypt the string with your private key.
+In order to encrypt data symmetrically you can use the following function. It also exports the randomly generated nonce along with the cypher test.
 
 ``` JavaScript
-const decryptedObject = Prism.privateDecrypt(data);
+const encrypted = alice.encrypt(data: object, key: string);
 ```
 
-### Sign
+### Decrypt data symmetrically
 
-This function allows you to create a signature of a JavaScript object with your private key.
+This function allows you to decrypt data that has been symmetrically encrypted with the public nonce and key.
 
 ``` JavaScript
-const signedString = Prism.sign(data);
+const decrypted = alice.decrypt(data: string, key: string, publicNonce: string);
 ```
 
-### Verify
+### Encrypt data with public key
 
-This function is used to verify that a know piece of data was signed with the private key of a corresponding public key.
+If you know the public key of a recipient you can encrypt data to send to them.
 
 ``` JavaScript
-const verifiedString = Prism.verify(knownData, signatureString, publicKey);
+const var = alice.encryptPublic(data: any, recipientPublicKey: string);
 ```
 
-### Encrypt
+### Decrypt data with private key
 
-This function allows you to encrypt a JavaScript object symmetrically by using a key.
+If someone sends you data encrypted with your public key, you can decrypt it using your private key.
 
 ``` JavaScript
-const encryptedString = Prism.encrypt(data, key);
+const var = alice.decryptPrivate(data: string);
 ```
 
-### Decrypt
+### Sign and encrypt data (Box)
 
-This function takes in a string that was encrypted with the ```encrypt``` function and the same symmetric key and returns a JavaScript object containing the unencrypted data.
+A Box is a standard encryption scheme that involves signing data with your private key and then encrypting both the data and signature with the recipients public key.
 
 ``` JavaScript
-const decryptedString = Prism.decrypt(data, key);
+const var = alice.encryptBox(data: any, recipientPublicKey: string);
 ```
 
-### To Pem File
+### Decrypt and verify data (Box)
 
-This function takes in the raw form of an RSA key, and a string indicating weather it is a private or public key and transforms it into pem format.
+If data has been encrypted with a Box you can then decrypt and verify it by providing the cypher text, public nonce and the senders public key.
 
 ``` JavaScript
-const pemKey = Prism.toPem(key, type);
+const var = alice.decryptBox(data: string, nonce: number, senderPublicKey: string);
 ```
 
-### Write Message
+### Create a key pair to be used in a key exchange
 
-This function helps users create a stand prism format message. It takes in the public key of the recipient of the message and the data itself. It then generates a symmetric key and encrypts the data with the symmetric key, and then encrypts the symmetric key itself with the recipients public key. Since this packet contains both an encrypted version of the key and the data itself, both pieces of data will be separated by a colin.
+When establishing a shared key you first need to generate a compatible key pair. This function will return both a public and private key.
 
 ``` JavaScript
-const encryptedMessage = Prism.writeMessage(recipientPublicKey, prismDataObject);
+const var = alice.generateKeyExchangePair();
 ```
 
-### Read Message
+### Calculate shared key set as IC
 
-This function parses the data that is in the write message format and returns a JavaScript object containing the decrypted data.
+When you trade public keys pairs intended to be used for key exchange this function allows you to generate a set of new shared keys. This function is intended to be used by the person how made the initial communication, as there is a slightly different function that must be used by the other participant. This function will return two keys intended to be used for symmetric encryption and one used for sending and one for receiving. The other participant will mathematically produce the same keys intended for the opposite purposes.
 
 ``` JavaScript
-const decryptedMessage = Prism.readMessage(packet);
+const var = alice.keyExchangeIC();
+```
+
+### Calculate shared key set as RC
+
+When you trade public keys pairs intended to be used for key exchange this function allows you to generate a set of new shared keys. This function is intended to be used by the person how made the response communication, as there is a slightly different function that must be used by the other participant. This function will return two keys intended to be used for symmetric encryption and one used for sending and one for receiving. The other participant will mathematically produce the same keys intended for the opposite purposes.
+
+``` JavaScript
+const var = alice.keyExchangeRC();
+```
+
+### Derive new key from previous
+
+This function will allow you to alter your keys upon each message without any communication from the opposite participant. This function is intended to be used to morph the send and receive keys generated after the key exchange.
+
+``` JavaScript
+const var = alice.keyDerivation();
 ```
