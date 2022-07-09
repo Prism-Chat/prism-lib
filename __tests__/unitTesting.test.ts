@@ -4,12 +4,12 @@ describe('Unit testing.', () => {
 	let alice: Prism;
 	let bob: Prism;
 
-	beforeEach(() => {
+	beforeEach(async () => {
 		alice = new Prism();
-		alice.generateKeyPair();
+		await alice.init();
 
 		bob = new Prism();
-		bob.generateKeyPair();
+		await bob.init();
 	});
 
 	afterEach(() => {});
@@ -19,54 +19,84 @@ describe('Unit testing.', () => {
 		expect(alice.privateKey).not.toEqual('');
 	});
 
-	test('Test RSA encrypt and decrypt.', () => {
-		let testObject = {
-			message: 'test',
+	test('Test public encrypt and decrypt.', () => {
+		const testObj = {
+			message: 'Hello World!',
 		};
 
-		let encrypted = alice.publicEncrypt(testObject, bob.publicKey);
-		let decrypted = bob.privateDecrypt(encrypted);
+		let cypher = alice.encryptPublic(testObj, bob.keys.publicKey);
+		let decrypted = bob.decryptPrivate(cypher);
 
-		expect(decrypted).toEqual(testObject);
+		expect(decrypted).toMatchObject(testObj);
 	});
 
-	test('Test RSA sign and verify.', () => {
-		let testObject = {
-			message: 'test',
+	test('Test box encrypt and decrypt.', () => {
+		const testObj = {
+			message: 'Hello World!',
 		};
 
-		let signed = alice.sign(testObject);
-		let verified = bob.verify(testObject, signed, alice.publicKey);
+		let { nonce, cypher } = alice.encryptBox(testObj, bob.keys.publicKey);
+		let decrypted = bob.decryptBox(cypher, nonce, alice.keys.publicKey);
 
-		expect(verified).toEqual(true);
+		expect(decrypted).toMatchObject(testObj);
 	});
 
-	test('Test symmetric encrypt and decrypt.', () => {
-		let testObject = {
-			message: 'test',
+	test('Test key exchange.', () => {
+		let aliceSessionPair = alice.generateKeyExchangePair();
+		let bobSessionPair = alice.generateKeyExchangePair();
+
+		let aliceSharedKeys = alice.keyExchangeIC(
+			aliceSessionPair.publicKey,
+			aliceSessionPair.privateKey,
+			bobSessionPair.publicKey
+		);
+		let bobSharedKeys = bob.keyExchangeRC(
+			bobSessionPair.publicKey,
+			bobSessionPair.privateKey,
+			aliceSessionPair.publicKey
+		);
+
+		expect(aliceSharedKeys.sendKey).toBe(bobSharedKeys.receiveKey);
+		expect(bobSharedKeys.sendKey).toBe(aliceSharedKeys.receiveKey);
+	});
+
+	test('Test key exchange and derivation.', () => {
+		let aliceSessionPair = alice.generateKeyExchangePair();
+		let bobSessionPair = alice.generateKeyExchangePair();
+
+		let aliceSharedKeys = alice.keyExchangeIC(
+			aliceSessionPair.publicKey,
+			aliceSessionPair.privateKey,
+			bobSessionPair.publicKey
+		);
+
+		let bobSharedKeys = bob.keyExchangeRC(
+			bobSessionPair.publicKey,
+			bobSessionPair.privateKey,
+			aliceSessionPair.publicKey
+		);
+
+		let kdfAliceSendKey = alice.keyDerivation(aliceSharedKeys.sendKey);
+		let kdfAliceReceiveKey = alice.keyDerivation(aliceSharedKeys.receiveKey);
+		let kdfBobSendKey = bob.keyDerivation(bobSharedKeys.sendKey);
+		let kdfBobReceiveKey = bob.keyDerivation(bobSharedKeys.receiveKey);
+
+		expect(aliceSharedKeys.sendKey).toBe(bobSharedKeys.receiveKey);
+		expect(bobSharedKeys.sendKey).toBe(aliceSharedKeys.receiveKey);
+
+		expect(kdfAliceSendKey).toBe(kdfBobReceiveKey);
+		expect(kdfBobSendKey).toBe(kdfAliceReceiveKey);
+	});
+
+	test('Test symmetric encryption.', () => {
+		const testObj = {
+			message: 'Hello World!',
 		};
+
 		let key = alice.generateKey();
+		let cypher = alice.encrypt(testObj, key);
+		let decrypted = bob.decrypt(cypher.cypher, key, cypher.publicNonce);
 
-		let encrypted = alice.encrypt(testObject, key);
-		let decrypted = bob.decrypt(encrypted, key);
-
-		expect(decrypted).toEqual(testObject);
-	});
-
-	test('Test write and read message.', () => {
-		let testObject = {
-			sender: alice.publicKey,
-			scheme: 'prism1',
-			type: 'message',
-			timestamp: Date.now(),
-			data: {
-				message: 'test',
-			},
-		};
-
-		let writtenMessage = alice.writeMessage(bob.publicKey, testObject);
-		let readMessage = bob.readMessage(writtenMessage);
-
-		expect(readMessage).toEqual(testObject);
+		expect(decrypted).toMatchObject(testObj);
 	});
 });

@@ -1,9 +1,8 @@
-import * as crypto from 'crypto';
+import _sodium from 'libsodium-wrappers';
 
 // Prism interface defining the main data transition packet.
-interface IPrism {
+interface IPrismPacket {
 	sender: string;
-	scheme: string;
 	type: string;
 	timestamp: number;
 	data: any;
@@ -12,145 +11,194 @@ interface IPrism {
 // Prism encryption class
 class Prism {
 	// Define Prism keys
-	public publicKey: string;
-	public privateKey: string;
+	public publicKey: any;
+	public privateKey: any;
+	private sodium: any;
 
-	// Assign keys from constructor to state
-	constructor(publicKey: string = '', privateKey: string = '') {
-		this.publicKey = publicKey;
-		this.privateKey = privateKey;
-	}
-
-	// Generates an RSA keypair to be used as your identity key
-	public generateKeyPair() {
-		// Generate keys
-		const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
-			modulusLength: 4096,
-			publicKeyEncoding: {
-				type: 'spki',
-				format: 'der',
-			},
-			privateKeyEncoding: {
-				type: 'pkcs8',
-				format: 'der',
-			},
-		});
-
-		// Assign keys to state
-		this.publicKey = publicKey.toString('base64');
-		this.privateKey = privateKey.toString('base64');
-
-		// Return keys
+	// Get object containing keys in base64 format.
+	get keys() {
 		return {
-			publicKey: this.publicKey,
-			privateKey: this.privateKey,
+			publicKey: this.sodium.to_base64(this.publicKey),
+			privateKey: this.sodium.to_base64(this.privateKey),
 		};
 	}
 
-	// Create random key to be used in symmetric encryption
-	public generateKey() {
-		return crypto
-			.randomBytes(Math.floor(Math.random() * (256 - 128 + 1)) + 128)
-			.toString('base64');
+	// Assign keys from constructor to state
+	constructor() {}
+
+	// Init async function to await sodium load
+	public async init(publicKey: string = '', privateKey: string = '') {
+		await _sodium.ready;
+		this.sodium = _sodium;
+
+		if (publicKey === '' || privateKey === '') {
+			let keys = this.generateKeyPair();
+			this.publicKey = keys.publicKey;
+			this.privateKey = keys.privateKey;
+		} else {
+			this.publicKey = this.sodium.from_base64(publicKey);
+			this.privateKey = this.sodium.from_base64(privateKey);
+		}
 	}
 
-	// Encrypt data with a public RSA key
-	public publicEncrypt(data: any, publicKey: string) {
-		return crypto
-			.publicEncrypt(
-				this.toPem(publicKey, 'public'),
-				Buffer.from(JSON.stringify(data))
-			)
-			.toString('base64');
+	// Generates a key to be used for symmetric encryption
+	public generateKey(): any {
+		const data = this.sodium.crypto_aead_chacha20poly1305_keygen();
+		return this.sodium.to_base64(data);
 	}
 
-	// Decrypt data with a private RSA key
-	public privateDecrypt(data: string) {
-		return JSON.parse(
-			crypto
-				.privateDecrypt(
-					this.toPem(this.privateKey, 'private'),
-					Buffer.from(data, 'base64')
-				)
-				.toString()
-		);
-	}
-
-	// Sign data with a private RSA key
-	public sign(data: any) {
-		return crypto
-			.sign(
-				'SHA256',
-				Buffer.from(JSON.stringify(data)),
-				this.toPem(this.privateKey, 'private')
-			)
-			.toString('base64');
-	}
-
-	// Verify that a piece of data was signed by the owner of a public key
-	public verify(data: any, signature: string, publicKey: string) {
-		return crypto.verify(
-			'SHA256',
-			Buffer.from(JSON.stringify(data)),
-			this.toPem(publicKey, 'public'),
-			Buffer.from(signature, 'base64')
-		);
+	// Generates a key pair to be used as your identity key
+	public generateKeyPair() {
+		const { publicKey, privateKey } = this.sodium.crypto_box_keypair();
+		return {
+			publicKey,
+			privateKey,
+		};
 	}
 
 	// Encrypt data with a symmetric key
-	public encrypt(data: any, key: string) {
-		let iv = crypto.randomBytes(16);
-		let cipher = crypto.createCipheriv(
-			'aes-256-cbc',
-			crypto.createHash('sha256').update(key).digest(),
-			iv
+	public encrypt(data: any, key: string): any {
+		let publicNonce = this.sodium.randombytes_buf(
+			this.sodium.crypto_aead_chacha20poly1305_NPUBBYTES
 		);
-		let cipherText = cipher.update(Buffer.from(JSON.stringify(data)));
-		return Buffer.concat([iv, cipherText, cipher.final()]).toString('base64');
+
+		let cypher = this.sodium.crypto_aead_chacha20poly1305_encrypt(
+			JSON.stringify(data),
+			null,
+			null,
+			publicNonce,
+			this.sodium.from_base64(key)
+		);
+
+		return {
+			publicNonce: this.sodium.to_base64(publicNonce),
+			cypher: this.sodium.to_base64(cypher),
+		};
 	}
 
 	// Decrypt data with a symmetric key
-	public decrypt(data: any, key: string) {
-		let input = Buffer.from(data, 'base64');
-		let decipher = crypto.createDecipheriv(
-			'aes-256-cbc',
-			crypto.createHash('sha256').update(key).digest(),
-			input.slice(0, 16)
+	public decrypt(data: string, key: string, publicNonce: string): any {
+		let decrypted = this.sodium.crypto_aead_chacha20poly1305_decrypt(
+			null,
+			this.sodium.from_base64(data),
+			null,
+			this.sodium.from_base64(publicNonce),
+			this.sodium.from_base64(key)
 		);
-		let output =
-			decipher.update(input.slice(16)).toString() + decipher.final().toString();
-		return JSON.parse(output);
+
+		return JSON.parse(this.sodium.to_string(decrypted));
 	}
 
-	// Convert RSA keys from Base64 format to a pem file format
-	public toPem(key: string, type: string) {
-		let parsed = '';
-		while (key.length > 0) {
-			parsed += key.substring(0, 64) + '\n';
-			key = key.substring(64);
-		}
-		return `-----BEGIN ${type.toUpperCase()} KEY-----\n${parsed}-----END ${type.toUpperCase()} KEY-----`;
-	}
-
-	// Create a standard Prism message
-	public writeMessage(recipientPublicKey: string, prismObject: IPrism) {
-		let messageKey = this.generateKey();
-		let messageKeyEncrypted = this.publicEncrypt(
-			messageKey,
-			recipientPublicKey
+	// Encrypt data with a public identity key
+	public encryptPublic(data: any, recipientPublicKey: any): any {
+		return this.sodium.to_base64(
+			this.sodium.crypto_box_seal(
+				JSON.stringify(data),
+				this.sodium.from_base64(recipientPublicKey)
+			)
 		);
-		let messageObjectEncrypted = this.encrypt(prismObject, messageKey);
-		return `${messageKeyEncrypted}:${messageObjectEncrypted}`;
 	}
 
-	// Read a standard Prism message
-	public readMessage(packet: string) {
-		let [encryptedSymmetricKey, encryptedPrismObject] = packet.split(':');
-		let messageKey = this.privateDecrypt(encryptedSymmetricKey);
-		let messageObject = this.decrypt(encryptedPrismObject, messageKey);
-		return messageObject;
+	// Decrypt data with a private identity key
+	public decryptPrivate(data: string): any {
+		return JSON.parse(
+			this.sodium.to_string(
+				this.sodium.crypto_box_seal_open(
+					this.sodium.from_base64(data),
+					this.publicKey,
+					this.privateKey
+				)
+			)
+		);
+	}
+
+	// Create encryption box
+	public encryptBox(data: any, recipientPublicKey: string) {
+		let nonce = this.sodium.randombytes_buf(this.sodium.crypto_box_NONCEBYTES);
+		let cypher = this.sodium.crypto_box_easy(
+			JSON.stringify(data),
+			nonce,
+			this.sodium.from_base64(recipientPublicKey),
+			this.privateKey
+		);
+		return {
+			nonce: this.sodium.to_base64(nonce),
+			cypher: this.sodium.to_base64(cypher),
+		};
+	}
+
+	// Decrypt an encryption box
+	public decryptBox(data: string, nonce: number, senderPublicKey: string) {
+		let decryptedPacket = this.sodium.crypto_box_open_easy(
+			this.sodium.from_base64(data),
+			this.sodium.from_base64(nonce),
+			this.sodium.from_base64(senderPublicKey),
+			this.privateKey
+		);
+		return JSON.parse(this.sodium.to_string(decryptedPacket));
+	}
+
+	// Generate key pair to later perform a key exchange
+	public generateKeyExchangePair() {
+		let keyPair = this.sodium.crypto_kx_keypair();
+		return {
+			publicKey: this.sodium.to_base64(keyPair.publicKey),
+			privateKey: this.sodium.to_base64(keyPair.privateKey),
+		};
+	}
+
+	// This function is to be used to preform a key exchange if you made the initial communication
+	public keyExchangeIC(
+		keyExchangePublicKey: string,
+		keyExchangePrivatekey: string,
+		receivedPublicKey: string
+	) {
+		let sessionKeys = this.sodium.crypto_kx_client_session_keys(
+			this.sodium.from_base64(keyExchangePublicKey),
+			this.sodium.from_base64(keyExchangePrivatekey),
+			this.sodium.from_base64(receivedPublicKey)
+		);
+		return {
+			receiveKey: this.sodium.to_base64(sessionKeys.sharedRx),
+			sendKey: this.sodium.to_base64(sessionKeys.sharedTx),
+		};
+	}
+
+	// This function is to be used to preform a key exchange if you are responding to the initial communication
+	public keyExchangeRC(
+		keyExchangePublicKey: string,
+		keyExchangePrivatekey: string,
+		receivedPublicKey: string
+	) {
+		let sessionKeys = this.sodium.crypto_kx_server_session_keys(
+			this.sodium.from_base64(keyExchangePublicKey),
+			this.sodium.from_base64(keyExchangePrivatekey),
+			this.sodium.from_base64(receivedPublicKey)
+		);
+		return {
+			receiveKey: this.sodium.to_base64(sessionKeys.sharedRx),
+			sendKey: this.sodium.to_base64(sessionKeys.sharedTx),
+		};
+	}
+
+	// Morph existing key in repeatable way.
+	public keyDerivation(key: string) {
+		const settings = {
+			subKeyLength: 32,
+			subKeyId: 1,
+			subKeyCtx: 'prism___',
+		};
+
+		let newKey = this.sodium.crypto_kdf_derive_from_key(
+			settings.subKeyLength,
+			settings.subKeyId,
+			settings.subKeyCtx,
+			this.sodium.from_base64(key)
+		);
+
+		return this.sodium.to_base64(newKey);
 	}
 }
 
 // Export Prism object as well as interface
-export { Prism, IPrism };
+export { Prism, IPrismPacket };
